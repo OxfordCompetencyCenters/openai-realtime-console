@@ -1,3 +1,9 @@
+# Local ignores
+notebook/**/*.pem
+notebook/**/*.json
+notebook/**/*.ipynb
+notebook/**/*.txt
+
 # build output
 dist/
 
