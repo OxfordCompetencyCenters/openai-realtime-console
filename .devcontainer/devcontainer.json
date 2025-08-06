@@ -61,5 +61,5 @@
     "workspaceFolder": "/workspace/openai-realtime-console",
 
     // Setup the project development environment after the container is created
-    "onCreateCommand": "uv sync && uv run pre-commit install --install-hooks && uv run pre-commit autoupdate && pnpm install",
+    "onCreateCommand": "uv sync && uv run pre-commit install --install-hooks && uv run pre-commit autoupdate && pnpm install && uv run jupytext --sync notebook/generate_jwt.py",
 }
