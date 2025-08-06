@@ -2,10 +2,14 @@ import express from "express";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import "dotenv/config";
+import jwt from "jsonwebtoken";
+const { JsonWebTokenError, TokenExpiredError, NotBeforeError } = jwt;
+import jwksClient from "jwks-rsa";
 
 const app = express();
 const port = process.env.PORT || 3000;
 const apiKey = process.env.OPENAI_API_KEY;
+const jwksUri = process.env.JWKS_URI;
 
 // Configure Vite middleware for React client
 const vite = await createViteServer({
@@ -14,8 +18,41 @@ const vite = await createViteServer({
 });
 app.use(vite.middlewares);
 
+async function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Extract token after "Bearer "
+
+  if (!token) return res.sendStatus(401); // No token provided
+
+  console.log("JWKS URI:", jwksUri);
+  const client = jwksClient({ jwksUri });
+  const signingKey = await client.getSigningKey();
+  const jwtPublicKey = signingKey.getPublicKey();
+  jwt.verify(token, jwtPublicKey, (err, jwt) => {
+    if (err) {
+      if (err instanceof JsonWebTokenError) {
+        console.error("Invalid JWT:", err);
+        return res.sendStatus(403);
+      } else if (err instanceof TokenExpiredError) {
+        console.error("Expired JWT:", err);
+        return res.sendStatus(403);
+      } else if (err instanceof NotBeforeError) {
+        console.error("Future JWT:", err);
+        return res.sendStatus(403);
+      } else {
+        console.error("Unknown JWT error:", err);
+        return res.sendStatus(403);
+      }
+    }
+    req.jwt = jwt; // Attach decoded JWT to request
+    next();
+  });
+}
+
 // API route for token generation
-app.get("/token", async (req, res) => {
+app.get("/openai/token", authenticateToken, async (req, res) => {
+  const { jwt } = req;
+  console.log("JWT resource link:", jwt['https://purl.imsglobal.org/spec/lti/claim/resource_link']);
   try {
     const response = await fetch(
       "https://api.openai.com/v1/realtime/sessions",

@@ -3,6 +3,8 @@ import logo from "/assets/openai-logomark.svg";
 import EventLog from "./EventLog";
 import SessionControls from "./SessionControls";
 import ToolPanel from "./ToolPanel";
+import {LtiTokenRetriever} from '@oxctl/ui-lti'
+import jwtDecode from 'jwt-decode'
 
 export default function App() {
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -10,10 +12,22 @@ export default function App() {
   const [dataChannel, setDataChannel] = useState(null);
   const peerConnection = useRef(null);
   const audioElement = useRef(null);
+  const [ltiTokenRetriever, setLtiTokenRetriever] = useState(null);
+  const [rawJwt, setRawJwt] = useState(String || null);
+  const [jwt, setJwt] = useState(null);
+
+  useEffect(() => console.log(jwt), [jwt]);
 
   async function startSession() {
     // Get a session token for OpenAI Realtime API
-    const tokenResponse = await fetch("/token");
+    const tokenResponse = await fetch(
+      '/openai/token',
+      {
+        headers: {
+          'Authorization': `Bearer ${rawJwt}`,
+        },
+      }
+    );
     const data = await tokenResponse.json();
     const EPHEMERAL_KEY = data.client_secret.value;
 
@@ -122,8 +136,22 @@ export default function App() {
     sendClientEvent({ type: "response.create" });
   }
 
+  // Safe wrapper for LTI token retrieval while supporting SSR
+  const updateToken = (token) => {
+    setRawJwt(token);
+    setJwt(jwtDecode(token));
+  }
+
   // Attach event listeners to the data channel when a new one is created
   useEffect(() => {
+
+    // Populate LTI token retriever when location is available
+    setLtiTokenRetriever(
+      <LtiTokenRetriever handleJwt={updateToken}>
+        <span></span>
+      </LtiTokenRetriever>
+    );
+
     if (dataChannel) {
       // Append new server events to the list
       dataChannel.addEventListener("message", (e) => {
@@ -174,6 +202,7 @@ export default function App() {
             events={events}
             isSessionActive={isSessionActive}
           />
+          {ltiTokenRetriever}
         </section>
       </main>
     </>

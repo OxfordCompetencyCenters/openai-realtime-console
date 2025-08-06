@@ -1,0 +1,65 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/python
+{
+    "name": "osce-practice",
+
+    // Please see https://containers.dev/guide/dockerfile for more information on how to configure your Dockerfile.
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+
+    // Toggle to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+    // "remoteUser": "root",
+    "remoteUser": "vscode",
+
+    // Features to add to the dev container. More info: https://containers.dev/features.
+    "features": {
+        // Allow access to the HOST docker socker for docker desktop
+        "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
+        "ghcr.io/devcontainers/features/node:1": {}
+    },
+
+    // Configure tool-specific properties.
+    "customizations": {
+        "vscode": {
+            "settings": {
+                // Configure the terminal to use zsh by default
+                "terminal.integrated.defaultProfile.linux": "zsh",
+                "terminal.integrated.profiles.linux": {
+                    "zsh": {
+                        "path": "/bin/zsh"
+                    }
+                },
+
+                // Configure the Python extension to use the virtual environment
+                "python.defaultInterpreterPath": "/home/vscode/.venv/bin/python3",
+                "python.venvPath": "/home/vscode/.venv",
+
+                "ruff.nativeServer": "auto",
+            },
+            "extensions": [
+                "charliermarsh.ruff",
+                "EditorConfig.EditorConfig",
+                "GitHub.copilot-chat@prerelease",
+                "GitHub.copilot@prerelease",
+                "GitHub.vscode-github-actions",
+                "GitHub.vscode-pull-request-github",
+                "ms-python.python",
+                "ms-vscode.hexeditor",
+                "stkb.rewrap",
+                "tamasfe.even-better-toml",
+                "ms-toolsai.jupyter"
+            ]
+        }
+    },
+
+    // Setup mounts and workspace to support Git worktree development inside the devcontainer
+    "mounts": [
+        "source=${localWorkspaceFolder}/../openai-realtime-console,target=${localWorkspaceFolder}/../openai-realtime-console,type=bind,consistency=delegated"
+    ],
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/openai-realtime-console,type=bind",
+    "workspaceFolder": "/workspace/openai-realtime-console",
+
+    // Setup the project development environment after the container is created
+    "onCreateCommand": "uv sync && uv run pre-commit install --install-hooks && uv run pre-commit autoupdate && pnpm install && uv run jupytext --sync notebook/generate_jwt.py",
+}
