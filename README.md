@@ -200,8 +200,8 @@ save_jwt_to_file(jwt_token, key_id, "future-jwt")
 ```
 
 Once you have specified the JWT that you want to can run the cell. This will
-save the JWT to a file under a folder named with the  `kid` specified previously
-in the notebook.
+save the JWT to a file under a folder named with the  `kid` specified
+previously in the notebook.
 
 The recommended flow is to specifiy a base configuration without a tag, and then
 run through all the cells in the notebook expect for the final cell. This will
@@ -219,21 +219,174 @@ and modify it as required. Then rerun this cell that will reuse the previously
 generated private key to sign this new JWT. You can repeat this step as many
 times as you like.
 
-At the end you will have a set of JWTs that are all signed using the same JWKS.
-You can then copy the contents of the JWKS and update the
-`/.well-known/jwks.json` enpoint in the Caddy server configuration. You can then
-update the various `/lti/*token` endpoints with the new JWTs, or create new JWT
-endpoints as required.
+At the end you will have a set of JWTs that are all signed using the same
+JWKS. You can then copy the contents of the JWKS and update the
+`/.well-known/jwks.json` enpoint in the Caddy server configuration. You can
+then update the various `/lti/*token` endpoints with the new JWTs, or create
+new JWT endpoints as required.
 
 ## 🔭 Reflection
 
-Managing JWTs and JWKS is fiddly, and simulating their operations within LTI is
-imperfect. This demonstrator aims to provide a practical first steps into
+## 🧩 Canvas LTI 1.3 Integration (New)
+
+This project now includes optional endpoints to run as an LTI 1.3 (LTI
+Advantage) tool inside Canvas while still supporting the original simulated
+launch flow. The new endpoints are additive; the existing demo flow continues
+to work unchanged.
+
+### High-level flow
+
+1. Canvas (Platform) sends users to your tool's OIDC login initiation
+    endpoint `/lti/login`.
+2. Your tool constructs an OIDC auth request and redirects the browser to
+    Canvas' authorization endpoint.
+3. Canvas authenticates the user and POSTs an `id_token` (LTI launch JWT) to
+    your `/lti/launch` endpoint.
+4. The tool verifies the JWT (issuer, audience / client ID, deployment ID,
+    nonce) using Canvas' JWKS.
+5. Dev mode convenience: the verified raw JWT is stored in `localStorage`
+    (`lti_jwt`) and the user is redirected to `/` where the existing UI finds
+    and uses it. (Production SHOULD exchange / persist server-side instead of
+    exposing the raw token to JS.)
+6. When you click “start session” the existing `/openai/token` endpoint
+    validates the JWT and proceeds exactly as before.
+
+### Do tools have to run in an iframe / have a standalone URL?
+
+Yes. Canvas launches LTI 1.3 tools by loading a URL (the `target_link_uri`)
+usually inside an iframe (e.g. Course Navigation, Assignments, Modules, etc.).
+Therefore a publicly reachable standalone HTTPS URL for your tool is required.
+This repository already serves a standalone web app; Canvas simply embeds it.
+
+### Environment variables
+
+New variables added to `.env.example`:
+
+```text
+CANVAS_ISSUER
+CANVAS_AUTHORIZATION_ENDPOINT
+CANVAS_JWKS_URI
+CANVAS_CLIENT_ID
+CANVAS_DEPLOYMENT_ID
+TOOL_DOMAIN
+TOOL_LOGIN_URL
+TOOL_LAUNCH_URL
+```
+
+Populate them after creating the Developer Key (client ID) and after
+installing the tool (deployment ID) in Canvas. During first configuration you
+will not yet know `CANVAS_DEPLOYMENT_ID`; you can set it later for stricter
+validation.
+
+### Creating the Developer Key (LTI Key) in Canvas
+
+1. Log in to Canvas as an admin.
+2. Navigate: Admin > (Your Account) > Developer Keys > + Developer Key > LTI Key.
+3. In the form choose “Enter JSON” and paste a version of
+    `canvas-lti-config.example.json` with placeholders replaced:
+
+    Replace `${TOOL_LOGIN_URL}` with your public login endpoint (e.g.
+    `https://yourtool.example.com/lti/login`). Replace `${TOOL_LAUNCH_URL}`
+    with your public launch endpoint (e.g.
+    `https://yourtool.example.com/lti/launch`). Optionally remove
+    `public_jwk_url` if you do not host a JWKS (this demo verifies Canvas'
+    JWKS only). It may be left blank; Canvas does not need your JWKS unless
+    you plan to sign services payloads or deep-link responses. You can keep
+    it but point to a future endpoint.
+
+     Minimal JSON example:
+
+     ```jsonc
+     {
+         "title": "OpenAI Realtime Console",
+         "scopes": [],
+         "oidc_initiation_url": "https://yourtool.example.com/lti/login",
+         "target_link_uri": "https://yourtool.example.com/lti/launch",
+         "extensions": [
+             {
+                 "platform": "canvas.instructure.com",
+                 "settings": {
+                     "placements": [
+                         {
+                             "placement": "course_navigation",
+                             "message_type": "LtiResourceLinkRequest",
+                             "target_link_uri": "https://yourtool.example.com/lti/launch",
+                             "text": "Realtime Console",
+                             "default": "disabled"
+                         }
+                     ]
+                 },
+                 "privacy_level": "public"
+             }
+         ],
+         "description": "Demo LTI 1.3 tool for OpenAI Realtime API integration"
+     }
+     ```
+
+4. Save. Note the **Developer Key ID** (an integer) – this becomes your
+    `CANVAS_CLIENT_ID`.
+5. Switch the key state to ON.
+
+### Installing the tool into a course (creating a Deployment)
+
+1. Enter a test course as a teacher (or admin acting as teacher).
+2. Go to Course Settings > Apps > View App Configurations > + App.
+3. Choose “By Client ID” and enter the Developer Key ID from above.
+4. Submit – Canvas will prompt to approve. On success the tool is installed
+    and a Deployment created.
+5. Copy the Deployment ID (visible if you click into the app details or via
+    Admin > Settings > Apps listing). Set `CANVAS_DEPLOYMENT_ID` in `.env` and
+    restart the server for stricter validation.
+6. In Course Navigation (Settings > Navigation) enable the “Realtime
+    Console” link if disabled.
+
+### Running locally with Canvas
+
+Canvas must access your tool over HTTPS with a resolvable public hostname.
+For local development use a tunnelling service (e.g. `ngrok`, `cloudflared`)
+pointing to your dev container port 3000.
+
+Example: `ngrok http https://localhost:3000` (if you terminate TLS locally)
+or `ngrok http 3000` for HTTP -> HTTPS tunnel. Then substitute the
+generated public domain in the JSON config and environment variables.
+
+### Launch test
+
+1. Rebuild / restart the dev server (`pnpm run dev`).
+2. From a Canvas course, click the navigation link. Canvas will perform OIDC
+    login -> launch. You should be redirected finally to `/` (root) of the tool
+    inside the iframe.
+3. Open browser dev tools: localStorage should contain `lti_jwt`.
+4. Click “start session” – the JWT should now validate server-side and the
+    OpenAI realtime session begin as before.
+
+### Security & production hardening
+
+For simplicity, the raw LTI `id_token` is exposed to front-end code through
+`localStorage`. In production you should instead:
+
+- Verify and unpack the id_token server-side only.
+- Persist session context (claims you need) in a secure server-side store
+    keyed by a session cookie.
+- Issue short-lived access tokens for API calls if required, not reuse the LTI
+    id_token beyond initial launch.
+- Implement timeout & replay protection; clear used nonce/state regularly.
+- Support key rotation for Canvas JWKS.
+
+### Duplicate vs replace behaviour
+
+The original simulated JWT retrieval (via the `LtiTokenRetriever` component
+and Caddy) still functions. The Canvas flow is additive: if
+`localStorage.lti_jwt` exists it will be used automatically; otherwise the
+simulated flow operates unchanged.
+
+Managing JWTs and JWKS is fiddly, and simulating their operations within LTI
+is imperfect. This demonstrator aims to provide a practical first steps into
 working with JWTs, JWKS, and LTI, but should be very clear that while every
-effort has been made to ensure everything is reasonable and correct, there may
-be errors, or limitations of the simulation. As such you are encouraged to trust
-any skepticism you may have if you see anything in this demonstrator that
-doesn't make sense ✨
+effort has been made to ensure everything is reasonable and correct, there
+may be errors, or limitations of the simulation. As such you are encouraged
+to trust any skepticism you may have if you see anything in this
+demonstrator that doesn't make sense ✨
 
 ## License
 

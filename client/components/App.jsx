@@ -18,6 +18,17 @@ export default function App() {
 
   useEffect(() => console.log(jwt), [jwt]);
 
+  // Fallback: if a Canvas LTI launch placed token in localStorage
+  useEffect(() => {
+    if (!rawJwt && typeof window !== 'undefined') {
+      const stored = window.localStorage.getItem('lti_jwt');
+      if (stored) {
+        updateToken(stored);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function startSession() {
     // Get a session token for OpenAI Realtime API
     const tokenResponse = await fetch(

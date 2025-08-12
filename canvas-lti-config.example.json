@@ -1,0 +1,27 @@
+{
+  "title": "OpenAI Realtime Console",
+  "scopes": [],
+  "public_jwk_url": "${TOOL_LAUNCH_URL}/.well-known/jwks.json",
+  "target_link_uri": "${TOOL_LAUNCH_URL}",
+  "oidc_initiation_url": "${TOOL_LOGIN_URL}",
+  "custom_fields": {},
+  "extensions": [
+    {
+      "platform": "canvas.instructure.com",
+      "settings": {
+        "platform": "canvas.instructure.com",
+        "placements": [
+          {
+            "placement": "course_navigation",
+            "message_type": "LtiResourceLinkRequest",
+            "target_link_uri": "${TOOL_LAUNCH_URL}",
+            "text": "Realtime Console",
+            "default": "disabled"
+          }
+        ]
+      },
+      "privacy_level": "public"
+    }
+  ],
+  "description": "Demo LTI 1.3 tool for OpenAI Realtime API integration"
+}
