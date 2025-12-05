@@ -5,6 +5,8 @@ import "dotenv/config";
 import jwt from "jsonwebtoken";
 const { JsonWebTokenError, TokenExpiredError, NotBeforeError } = jwt;
 import jwksClient from "jwks-rsa";
+import https from "https";
+import path from "path";
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -96,6 +98,10 @@ app.use("*", async (req, res, next) => {
   }
 });
 
-app.listen(port, () => {
+const key = fs.readFileSync(path.resolve("/home/vscode/.vite-plugin-mkcert/dev.pem"));
+const cert = fs.readFileSync(path.resolve("/home/vscode/.vite-plugin-mkcert/cert.pem"));
+
+const server = https.createServer({ key, cert }, app);
+server.listen(port, () => {
   console.log(`Express server running on *:${port}`);
 });
